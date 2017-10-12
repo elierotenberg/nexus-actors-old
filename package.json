@@ -1,0 +1,26 @@
+{
+  "name": "nexus-actors",
+  "version": "0.0.0-dev",
+  "description": "Actors framework for distributed JavaScript systems",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elierotenberg/nexus-actors.git"
+  },
+  "author": "Elie Rotenberg <elie@rotenberg.io>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/elierotenberg/nexus-actors/issues"
+  },
+  "homepage": "https://github.com/elierotenberg/nexus-actors#readme",
+  "dependencies": {
+    "prettier": "^1.7.4",
+    "ts": "0.0.0",
+    "tslint": "^5.7.0",
+    "tstl": "^1.5.9",
+    "typescript": "^2.5.3"
+  }
+}
