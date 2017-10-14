@@ -47,7 +47,7 @@ namespace Executor {
 
   type ExecutorFSM = FSM<ExecutorState>;
 
-  export class Executor {
+  export class Executor<ProcessState> {
     private readonly host: Host.Host;
     private readonly self: Process.Reference;
     /**
@@ -65,21 +65,22 @@ namespace Executor {
     private readonly requests: Queue<Supervision.Request>;
 
     /**
-     * Current status of the executor (not to be confused with process state).
+     * Current state of the executor (not to be confused with process state, which this executor.stance.state).
      */
     private fsm: ExecutorFSM;
-
-    private behavior: Process.Behavior;
-    private state: any;
+    /**
+     * Current stance of the executed process
+     */
+    private stance: Process.Stance<ProcessState>;
 
     public constructor(
       host: Host.Host,
       self: Process.Reference,
-      initialBehavior: Process.Behavior,
-      initialState: any
+      stance: Process.Stance<ProcessState>
     ) {
       this.host = host;
       this.self = self;
+      this.stance = stance;
       this.children = new Set();
       this.messages = new Queue();
       this.requests = new Queue();
@@ -87,23 +88,16 @@ namespace Executor {
       this.fsm = new FSM("start", allowedExecutorStateTransitions);
     }
 
-    private become({
-      state,
-      behavior
-    }: {
-      state: any;
-      behavior: Process.Behavior;
-    }) {
+    private become(nextStance: Process.Stance<ProcessState>) {
       this.fsm.assert(state => state === "receiving");
-      this.state = state;
-      this.behavior = behavior;
+      this.stance = nextStance;
     }
 
-    private context(): Process.Context {
+    private context(): Process.Context<ProcessState> {
       return {
         host: this.host,
         self: this.self,
-        state: this.state,
+        state: this.stance.state,
         send: this.send,
         spawn: this.spawn
       };
@@ -158,9 +152,10 @@ namespace Executor {
       const context = this.context();
       let effect: Supervision.Effect;
       try {
-        effect = await this.behavior.supervise(context, request);
+        effect = await this.stance.behavior.supervise(context, request);
       } catch (reason) {
-        this.host.dispatchSupervisionResponse(request.response("stop"));
+        // Host code is assumed to not throw in normal conditions for now.
+        await this.host.dispatchSupervisionResponse(request.response("stop"));
         this.fsm.transitionTo("raising");
         return await this.raise(reason);
       }
@@ -173,9 +168,9 @@ namespace Executor {
       this.fsm.assert(state => state === "receiving");
       const context = this.context();
       const payload = message.payload;
-      let effect: Process.BecomeEffect;
+      let nextStance: Process.Stance<ProcessState>;
       try {
-        effect = await this.behavior(context, payload);
+        nextStance = await this.stance.behavior(context, payload);
       } catch (reason) {
         /**
          * Message is lost and will never be recovered.
@@ -184,14 +179,7 @@ namespace Executor {
         this.fsm.transitionTo("raising");
         return await this.raise(reason);
       }
-      this.become(Process.become(effect, this.state, this.behavior));
-      const { state, behavior } = Process.become(
-        effect,
-        this.state,
-        this.behavior
-      );
-      this.state = state;
-      this.behavior = behavior;
+      this.become(nextStance);
       this.fsm.transitionTo("sleeping");
       return await this.resume();
     }
@@ -222,15 +210,36 @@ namespace Executor {
       return unreachable();
     }
 
-    private async send(target: Process.Reference, payload: any) {}
+    private async send(target: Process.Reference, payload: any): Promise<void> {
+      this.fsm.assert(state => state === "receiving");
+      const message = new Message(this.self, target, payload);
+      return await this.host.dispatchMessage(message);
+    }
 
-    private spawn(
-      target: Process.Reference,
-      behavior: Process.Behavior,
-      state: any
-    ): Process.Reference {}
+    private async spawn(
+      stance: Process.Stance<any>,
+      name?: string
+    ): Promise<Process.Reference> {
+      this.fsm.assert(state => state === "receiving");
+      return await this.host.createProcess(stance, name);
+    }
 
-    private async terminate(reason: any): Promise<Host.Tick> {}
+    private async terminate(reason: any): Promise<Host.Tick> {
+      try {
+        await this.host.terminateProcess(this);
+      } catch (unrecoverableError) {
+        throw new ExecutorInvariantError(
+          `Unrecoverable termination error ${unrecoverableError.toString()}`
+        );
+      }
+      this.fsm.transitionTo("end");
+      return await this.end();
+    }
+
+    private async end(): Promise<Host.Tick> {
+      this.fsm.assert(state => state === "end");
+      return this.host.tick();
+    }
   }
 }
 

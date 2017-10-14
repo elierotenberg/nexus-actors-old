@@ -16,13 +16,22 @@ namespace Host {
   export interface Host {
     tick(): Promise<Tick>;
     supervise: (
-      executor: Executor.Executor,
-      context: Process.Context,
+      executor: Executor.Executor<any>,
+      context: Process.Context<any>,
       request: Supervision.Request,
       reason: any
     ) => Promise<Supervision.Effect>;
-    dispatchMessage: (message: Message) => void;
-    dispatchSupervisionResponse: (response: Supervision.Response) => void;
+    dispatchMessage: (message: Message) => Promise<void>;
+    dispatchSupervisionResponse: (
+      response: Supervision.Response
+    ) => Promise<void>;
+    createProcess: (
+      stance: Process.Stance<any>,
+      name?: string
+    ) => Promise<Process.Reference>;
+    terminateProcess: (
+      executor: Executor.Executor<any>
+    ) => Promise<Process.Reference>;
   }
 }
 
