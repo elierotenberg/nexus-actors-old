@@ -6,16 +6,23 @@
  */
 
 import Executor from "./Executor";
+import Message from "./Message";
 import Process from "./Process";
 import Supervision from "./Supervision";
 
 namespace Host {
+  export type Tick = { tick: number };
+
   export interface Host {
+    tick(): Promise<Tick>;
     supervise: (
       executor: Executor.Executor,
       context: Process.Context,
-      request: Supervision.Request
+      request: Supervision.Request,
+      reason: any
     ) => Promise<Supervision.Effect>;
+    dispatchMessage: (message: Message) => void;
+    dispatchSupervisionResponse: (response: Supervision.Response) => void;
   }
 }
 
