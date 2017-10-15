@@ -42,8 +42,8 @@ export namespace Supervision {
     }
   }
 
-  export interface Strategy {
-    (context: Process.Context, request: Request): Promise<Effect>;
+  export interface Strategy<State> {
+    (context: Process.Context<State>, request: Request): Promise<Effect>;
   }
 }
 

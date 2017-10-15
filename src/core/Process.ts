@@ -19,24 +19,24 @@ namespace Process {
   }
 
   export interface Process {
-    self: Process.Reference;
-    send(receiver: Process.Reference, payload: any): void;
+    self: Reference;
+    send(receiver: Reference, payload: any): void;
   }
 
   export interface Context<State> {
-    host: Host.Host;
+    host: Host.Host<any>;
 
-    self: Process.Reference;
+    self: Reference;
 
     state: State;
 
-    send(target: Reference, payload: any): void;
-    spawn(target: Reference, stance: Stance<any>): Process.Reference;
+    send(target: Reference, payload: any): Promise<void>;
+    spawn(stance: Stance<any>, name?: string): Promise<Reference>;
   }
 
   export interface Behavior<State> {
     (context: Context<State>, payload: any): Promise<Stance<State>>;
-    supervise: Supervision.Strategy;
+    supervise: Supervision.Strategy<State>;
   }
 
   export interface Stance<State> {

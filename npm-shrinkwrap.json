@@ -217,6 +217,12 @@
         "tsutils": "2.12.1"
       }
     },
+    "tslint-config-prettier": {
+      "version": "1.5.0",
+      "resolved": "https://registry.npmjs.org/tslint-config-prettier/-/tslint-config-prettier-1.5.0.tgz",
+      "integrity": "sha512-vmTO1u46nodF8rInK2foAT+Dlrc6v0sqBKBVm0r6jTIBBincB3lo9r7aFDdpUxNazly8NUh2QNUaLNQIpKUZhQ==",
+      "dev": true
+    },
     "tstl": {
       "version": "1.5.9",
       "resolved": "https://registry.npmjs.org/tstl/-/tstl-1.5.9.tgz",

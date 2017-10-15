@@ -8,30 +8,32 @@
 import Executor from "./Executor";
 import Message from "./Message";
 import Process from "./Process";
+import Router from "./Router";
 import Supervision from "./Supervision";
 
 namespace Host {
   export type Tick = { tick: number };
 
-  export interface Host {
-    tick(): Promise<Tick>;
-    supervise: (
+  export class Host<Router extends Router.Router<any>> {
+    async tick(): Promise<Tick> {}
+    async supervise(
       executor: Executor.Executor<any>,
       context: Process.Context<any>,
       request: Supervision.Request,
       reason: any
-    ) => Promise<Supervision.Effect>;
-    dispatchMessage: (message: Message) => Promise<void>;
-    dispatchSupervisionResponse: (
+    ): Promise<Supervision.Effect> {}
+    async dispatchMessage(message: Message): Promise<void> {}
+    async dispatchSupervisionResponse(
       response: Supervision.Response
-    ) => Promise<void>;
-    createProcess: (
+    ): Promise<void> {}
+    async createProcess(
+      executor: Executor.Executor<any>,
       stance: Process.Stance<any>,
       name?: string
-    ) => Promise<Process.Reference>;
-    terminateProcess: (
+    ): Promise<Process.Reference> {}
+    async terminateProcess(
       executor: Executor.Executor<any>
-    ) => Promise<Process.Reference>;
+    ): Promise<Process.Reference> {}
   }
 }
 

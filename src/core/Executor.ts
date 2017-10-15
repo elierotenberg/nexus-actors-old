@@ -5,8 +5,8 @@
  * If there was no possible confusion with NodeJS, this concept would be named "Node" (as in: part of a cluster)
  */
 
-import { InvariantError } from "../util/Invariant";
 import FSM from "../util/FSM";
+import { InvariantError } from "../util/Invariant";
 import Queue from "../util/Queue";
 import unreachable from "../util/unreachable";
 
@@ -48,7 +48,7 @@ namespace Executor {
   type ExecutorFSM = FSM<ExecutorState>;
 
   export class Executor<ProcessState> {
-    private readonly host: Host.Host;
+    private readonly host: Host.Host<any, any>;
     private readonly self: Process.Reference;
     /**
      * The supervised children.
@@ -74,7 +74,7 @@ namespace Executor {
     private stance: Process.Stance<ProcessState>;
 
     public constructor(
-      host: Host.Host,
+      host: Host.Host<any>,
       self: Process.Reference,
       stance: Process.Stance<ProcessState>
     ) {
@@ -221,7 +221,7 @@ namespace Executor {
       name?: string
     ): Promise<Process.Reference> {
       this.fsm.assert(state => state === "receiving");
-      return await this.host.createProcess(stance, name);
+      return await this.host.createProcess(this, stance, name);
     }
 
     private async terminate(reason: any): Promise<Host.Tick> {
