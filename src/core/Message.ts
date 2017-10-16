@@ -1,17 +1,19 @@
 import Process from "./Process";
 
-class Message {
-  public readonly sender: Process.Reference;
-  public readonly receiver: Process.Reference;
-  public readonly payload: any;
-  public constructor(
-    sender: Process.Reference,
-    receiver: Process.Reference,
-    payload: any
-  ) {
-    this.sender = sender;
-    this.receiver = receiver;
-    this.payload = payload;
+namespace Message {
+  export class Message {
+    public readonly sender: Process.Reference;
+    public readonly receiver: Process.Reference;
+    public readonly payload: any;
+    public constructor(
+      sender: Process.Reference,
+      receiver: Process.Reference,
+      payload: any
+    ) {
+      this.sender = sender;
+      this.receiver = receiver;
+      this.payload = payload;
+    }
   }
 }
 

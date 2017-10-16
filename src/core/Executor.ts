@@ -48,7 +48,7 @@ namespace Executor {
   type ExecutorFSM = FSM<ExecutorState>;
 
   export class Executor<ProcessState> {
-    private readonly host: Host.Host<any, any>;
+    private readonly host: Host.Host;
     private readonly self: Process.Reference;
     /**
      * The supervised children.
@@ -58,7 +58,7 @@ namespace Executor {
     /**
      * Incoming message queue (back is most recent message, front is least recent message)
      */
-    private readonly messages: Queue<Message>;
+    private readonly messages: Queue<Message.Message>;
     /**
      * Incoming supervision request queue (back is most recent alert, front is least recent alert)
      */
@@ -74,7 +74,7 @@ namespace Executor {
     private stance: Process.Stance<ProcessState>;
 
     public constructor(
-      host: Host.Host<any>,
+      host: Host.Host,
       self: Process.Reference,
       stance: Process.Stance<ProcessState>
     ) {
@@ -103,7 +103,7 @@ namespace Executor {
       };
     }
 
-    public pushMessage(message: Message): this {
+    public pushMessage(message: Message.Message): this {
       this.fsm.assert(state => state !== "end");
       this.messages.push(message);
       return this;
@@ -164,7 +164,7 @@ namespace Executor {
       return await this.resume();
     }
 
-    private async receive(message: Message): Promise<Host.Tick> {
+    private async receive(message: Message.Message): Promise<Host.Tick> {
       this.fsm.assert(state => state === "receiving");
       const context = this.context();
       const payload = message.payload;
@@ -212,7 +212,7 @@ namespace Executor {
 
     private async send(target: Process.Reference, payload: any): Promise<void> {
       this.fsm.assert(state => state === "receiving");
-      const message = new Message(this.self, target, payload);
+      const message = new Message.Message(this.self, target, payload);
       return await this.host.dispatchMessage(message);
     }
 

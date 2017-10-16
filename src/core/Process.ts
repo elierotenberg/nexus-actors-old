@@ -5,16 +5,12 @@
 
 import Host from "./Host";
 import Supervision from "./Supervision";
+import URLReference from "../util/URLReference";
 
 namespace Process {
-  export class Reference {
-    public readonly url: URL;
+  export class Reference extends URLReference<"Process"> {
     public constructor(url: URL) {
-      this.url = url;
-    }
-
-    public get parent(): Reference {
-      return new Reference(new URL("..", this.url.href));
+      super("Process", url);
     }
   }
 
@@ -24,7 +20,7 @@ namespace Process {
   }
 
   export interface Context<State> {
-    host: Host.Host<any>;
+    host: Host.Host;
 
     self: Reference;
 
