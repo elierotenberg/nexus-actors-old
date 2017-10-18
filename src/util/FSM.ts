@@ -21,6 +21,10 @@ class FSM<State extends string> {
     this.allowedStateTransitions = allowedStateTransitions;
   }
 
+  public test(predicate: (state: State) => boolean): boolean {
+    return predicate(this.state);
+  }
+
   public assert(predicate: (state: State) => boolean) {
     if (!predicate(this.state)) {
       throw new FSMInvariantError("Assertion not matched");

@@ -4,6 +4,8 @@
  * A Host relies on a platform-specific backend for actually joining a cluster, sending messages to the cluster, etc.
  * A Host holds a pool of Executors reducing Processes.
  */
+import Deferred from "../util/Deferred";
+import { InvariantError } from "../util/Invariant";
 import notImplemented from "../util/notImplemented";
 import URLReference from "../util/URLReference";
 import unreachable from "../util/unreachable";
@@ -11,116 +13,203 @@ import unreachable from "../util/unreachable";
 import Cluster from "../cluster/Cluster";
 import Executor from "./Executor";
 import Message from "./Message";
+import Packet from "./Packet";
 import Platform from "./Platform";
 import Process from "./Process";
+import Scheduling from "./Scheduling";
 import Supervision from "./Supervision";
 
+import ExecutorPool from "./Host.ExecutorPool";
+
 namespace Host {
+  export class HostInvariantError extends InvariantError {
+    constructor(description: string) {
+      super("HostInvariantError", description);
+    }
+  }
+
   export class Reference extends URLReference<"Host"> {
     constructor(url: URL) {
       super("Host", url);
     }
   }
 
-  export class Tick {
-    public readonly host: Host.Reference;
-    public readonly hostClockDate: number;
-    public constructor(host: Host.Reference, hostClockDate: number) {
-      this.host = host;
-      this.hostClockDate = hostClockDate;
-    }
-  }
-
-  export type PacketKind =
-    | "Message"
-    | "SupervisionRequest"
-    | "SupervisionResponse";
-
-  export class Packet {
-    public readonly kind: PacketKind;
-    public readonly target: Process.Reference;
-    public readonly payload: any;
-    public constructor(
-      obj: Message.Message | Supervision.Request | Supervision.Response
-    ) {
-      if (obj instanceof Message.Message) {
-        this.kind = "Message";
-        this.target = obj.receiver;
-        this.payload = obj.payload;
-        return this;
-      }
-      if (obj instanceof Supervision.Request) {
-        this.kind = "SupervisionRequest";
-        this.target = obj.child.parent;
-        this.payload = {
-          id: obj.id,
-          reason: obj.reason
-        };
-        return this;
-      }
-      if (obj instanceof Supervision.Response) {
-        this.kind = "SupervisionResponse";
-        this.target = obj.child;
-        this.payload = {
-          id: obj.id,
-          effect: obj.effect
-        };
-        return this;
-      }
-      return unreachable();
-    }
+  export interface Context {
+    wallclock(): Promise<number>;
+    publish(packet: Packet.Packet): Promise<void>;
+    acquire(host: Reference): Promise<void>;
+    release(host: Reference): Promise<void>;
   }
 
   export class Host {
     private readonly self: Reference;
-    private readonly platform: Platform.Platform;
-    private readonly cluster?: Cluster.Cluster;
+    private readonly context: Context;
+    private readonly executorPool: ExecutorPool;
 
-    public constructor(
-      self: Reference,
-      platform: Platform.Platform,
-      cluster?: Cluster.Cluster
-    ) {
+    public constructor(self: Reference, context: Context) {
       this.self = self;
-      this.platform = platform;
-      this.cluster = cluster;
+      this.context = context;
+
+      this.executorPool = new ExecutorPool();
+
+      // Early bind methods that will be bound to this.executorContext()
+      this.createProcess = this.createProcess.bind(this);
+      this.dispatchMessage = this.dispatchMessage.bind(this);
+      this.dispatchSupervisionResponse = this.dispatchSupervisionResponse.bind(
+        this
+      );
+      this.supervise = this.supervise.bind(this);
+      this.terminateProcess = this.terminateProcess.bind(this);
+      this.tick = this.tick.bind(this);
+    }
+    /**
+     * Public methods will be invoked by the underlying Context implementation
+     */
+
+    public async receive(packet: Packet.Packet): Promise<void> {
+      if (packet instanceof Message.Message) {
+        return await this.receiveMessage(packet.payload);
+      }
+      if (packet instanceof Supervision.Request) {
+        return await this.receiveSupervisionRequest(packet);
+      }
+      if (packet instanceof Supervision.Response) {
+        return await this.receiveSupervisionResponse(packet);
+      }
+      if (packet instanceof Scheduling.Create) {
+        return await this.receiveCreate(packet);
+      }
+      if (packet instanceof Scheduling.Terminate) {
+        return await this.receiveTerminate(packet);
+      }
     }
 
-    public async tick(): Promise<Tick> {
-      // Implicit host capability: construct new Date() appropriately
-      return new Tick(this.self, this.platform.clockTick());
+    private async receiveMessage(message: Message.Message): Promise<void> {
+      if (!this.executorPool.hasProcess(message.receiver)) {
+        throw new HostInvariantError("Local process should have an executor");
+      }
+      const receiverExecutor = this.executorPool.getExecutor(
+        message.receiver
+      ) as Executor.Executor<any>;
+      receiverExecutor.pushMessage(message);
+      receiverExecutor.wake();
+      return;
     }
 
-    public async supervise(
-      executor: Executor.Executor<any>,
-      context: Process.Context<any>,
-      request: Supervision.Request,
-      reason: any
-    ): Promise<Supervision.Effect> {
-      return notImplemented();
+    private async receiveSupervisionRequest(
+      request: Supervision.Request
+    ): Promise<void> {
+      if (!this.executorPool.hasProcess(request.child.parent)) {
+        const response = new Supervision.Response(
+          request.id,
+          request.child,
+          "stop"
+        );
+        await this.context.publish(response);
+        throw new HostInvariantError("Local process should have an executor");
+      }
+      const parentExecutor = this.executorPool.getExecutor(
+        request.child.parent
+      ) as Executor.Executor<any>;
+      parentExecutor.pushSupervisionRequest(request);
+      parentExecutor.wake();
     }
 
-    async dispatchMessage(message: Message.Message): Promise<void> {
-      return notImplemented();
-    }
-
-    async dispatchSupervisionResponse(
+    private async receiveSupervisionResponse(
       response: Supervision.Response
     ): Promise<void> {
-      return notImplemented();
+      return await this.executorPool.resolveDeferredSupervisionRequest(
+        response
+      );
     }
 
-    async createProcess(
-      executor: Executor.Executor<any>,
-      stance: Process.Stance<any>,
-      name?: string
-    ): Promise<Process.Reference> {
-      return notImplemented();
+    private async receiveCreate(create: Scheduling.Create<any>): Promise<void> {
+      const { child, stance } = create;
+      const executor = new Executor.Executor(
+        this.executorContext(),
+        child,
+        stance
+      )
+        .start()
+        .wake();
+      this.executorPool.insertProcess(child, executor);
+      return;
     }
-    async terminateProcess(
-      executor: Executor.Executor<any>
+
+    private async receiveTerminate(
+      terminate: Scheduling.Terminate
+    ): Promise<void> {
+      const { target, reason } = terminate;
+      if (!this.executorPool.hasProcess(target)) {
+        throw new HostInvariantError("Local process should have an executor");
+      }
+
+      const executor = this.executorPool.getExecutor(
+        target
+      ) as Executor.Executor<any>;
+      await executor.kill(reason); // Releasing of this executor will happen in this.releaseExecutor
+    }
+
+    private executorContext(): Executor.Context {
+      return {
+        releaseProcess: this.releaseProcess,
+        createProcess: this.createProcess,
+        dispatchMessage: this.dispatchMessage,
+        dispatchSupervisionResponse: this.dispatchSupervisionResponse,
+        supervise: this.supervise,
+        terminateProcess: this.terminateProcess,
+        tick: this.tick
+      };
+    }
+
+    private async releaseProcess(process: Process.Reference): Promise<void> {
+      this.executorPool.deleteProcess(process);
+    }
+
+    private async tick(): Promise<Executor.Tick> {
+      return new Executor.Tick(await this.context.wallclock());
+    }
+
+    private async supervise(
+      request: Supervision.Request
+    ): Promise<Supervision.Effect> {
+      const deferred = new Deferred() as Deferred<Supervision.Response>;
+      this.executorPool.insertDeferredSupervisionRequest(request, deferred);
+
+      // Reception will be handled by a local or remote Host#receiveSupervisionRequest
+      await this.context.publish(request);
+      // This might take a while and should probably be gated by some sort of timeout in the future.
+      const response = await deferred.join();
+      return response.effect;
+    }
+
+    private async dispatchMessage(message: Message.Message): Promise<void> {
+      return await this.context.publish(message);
+    }
+
+    private async dispatchSupervisionResponse(
+      response: Supervision.Response
+    ): Promise<void> {
+      return await this.context.publish(response);
+    }
+
+    private async createProcess(
+      parent: Process.Reference,
+      stance: Process.Stance<any>,
+      name: string
     ): Promise<Process.Reference> {
-      return notImplemented();
+      const child = parent.child(name);
+      await this.context.publish(new Scheduling.Create(child, stance));
+      return child;
+    }
+
+    private async terminateProcess(
+      target: Process.Reference,
+      reason: any
+    ): Promise<void> {
+      return await this.context.publish(
+        new Scheduling.Terminate(target, reason)
+      );
     }
   }
 }

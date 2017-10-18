@@ -4,6 +4,11 @@
   "lockfileVersion": 1,
   "requires": true,
   "dependencies": {
+    "@types/node": {
+      "version": "8.0.44",
+      "resolved": "https://registry.npmjs.org/@types/node/-/node-8.0.44.tgz",
+      "integrity": "sha512-56TeARKE2uMi7xWhpRRws/QdnpSVx9i7E8esGiPYoj90jnonGfmV1vwRLvHWYjPxF5u5l7p5fgdKwdse+VeAQQ=="
+    },
     "ansi-regex": {
       "version": "2.1.1",
       "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-2.1.1.tgz",

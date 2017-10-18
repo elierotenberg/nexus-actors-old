@@ -8,6 +8,18 @@ class URLReference<Kind> {
   public get parent(): URLReference<Kind> {
     return new URLReference(this.kind, new URL("..", this.url.href));
   }
+
+  public child(path: string): URLReference<Kind> {
+    return new URLReference(this.kind, new URL(path, this.url.href));
+  }
+
+  public toString(): string {
+    return JSON.stringify({ kind: this.kind, url: this.url.toString() });
+  }
+
+  owns(other: URLReference<any>): boolean {
+    return other.url.pathname.startsWith(this.url.pathname);
+  }
 }
 
 export default URLReference;

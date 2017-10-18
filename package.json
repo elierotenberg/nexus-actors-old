@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/elierotenberg/nexus-actors#readme",
   "dependencies": {
+    "@types/node": "^8.0.44",
     "prettier": "^1.7.4",
     "ts": "0.0.0",
     "tslint": "^5.7.0",

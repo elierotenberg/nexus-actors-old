@@ -20,8 +20,6 @@ namespace Process {
   }
 
   export interface Context<State> {
-    host: Host.Host;
-
     self: Reference;
 
     state: State;
